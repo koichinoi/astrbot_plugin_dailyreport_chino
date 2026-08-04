@@ -1,0 +1,184 @@
+{
+  "report_title": {
+    "type": "string",
+    "description": "日报标题",
+    "default": "智乃的今日日报"
+  },
+  "report_theme": {
+    "type": "string",
+    "description": "日报图片主题",
+    "hint": "auto：白天使用 chino 手账主题、夜间自动切换星空 night（夜间时段由 night_start_hour / night_end_hour 决定）；chino：Rabbit House 蓝白手账长海报，内置智乃、提比、咖啡和店铺插画，本地渲染无需联网；night：Rabbit House 星夜深色主题；murasame：丛雨和风神社主题；plain：朴素文字转图。默认 chino。主题失败会自动回退。",
+    "default": "chino",
+    "options": ["auto", "chino", "night", "murasame", "plain"]
+  },
+  "night_start_hour": {
+    "type": "int",
+    "description": "夜间主题起始小时（report_theme=auto 时生效）",
+    "hint": "24 小时制。从这个点（含）开始用星空深色主题。默认 18（晚 6 点）。",
+    "default": 18
+  },
+  "night_end_hour": {
+    "type": "int",
+    "description": "夜间主题结束小时（report_theme=auto 时生效）",
+    "hint": "24 小时制。到这个点（不含）为止仍是夜间，之后回到浅色。默认 6（早 6 点）。即夜间默认是 18:00–次日 6:00。",
+    "default": 6
+  },
+  "report_as_image": {
+    "type": "bool",
+    "description": "把完整日报渲染成一张图片发送",
+    "hint": "开启（默认）后，/日报、定时推送、AI 取整份日报时会把所有板块渲染成一张图片发出。依赖 AstrBot 的渲染能力（html_render / text_to_image）。渲染失败会自动退回文字。关闭则发文字。/每日新闻、/今日番剧 等单板块指令仍发文字。",
+    "default": true
+  },
+  "render_scale": {
+    "type": "float",
+    "description": "渲染精度/缩放（主题卡片）",
+    "hint": "用 CSS 缩放控制图片清晰度，1.0~4.0。数值越大越清晰（图片也越大）。默认 2.0。注意：≥2 时卡片会撑满画布、消掉两侧留白；若你的渲染视口很宽、两侧仍有留白，可调到 2.5~3。觉得图片太大/太糊就在此调整。仅对智乃主题图片生效。",
+    "default": 2.0
+  },
+  "show_calendar": {
+    "type": "bool",
+    "description": "日报包含『日历 / 农历』板块",
+    "default": true
+  },
+  "show_news": {
+    "type": "bool",
+    "description": "日报包含『每日新闻』板块",
+    "default": true
+  },
+  "show_anime": {
+    "type": "bool",
+    "description": "日报包含『今日番剧』板块",
+    "default": true
+  },
+  "show_hotlists": {
+    "type": "bool",
+    "description": "日报包含『各站热榜』板块",
+    "default": true
+  },
+  "alapi_token": {
+    "type": "string",
+    "description": "ALAPI Token（新闻+热榜需要）",
+    "hint": "新闻和热榜默认走 ALAPI（alapi.cn），需先在 alapi.cn 注册账号、在用户中心创建 token 填到这里。番剧不需要。免费额度约 200 次/天，每次 /日报 约消耗 4 次。",
+    "default": ""
+  },
+  "news_api": {
+    "type": "string",
+    "description": "每日新闻 API",
+    "hint": "默认 ALAPI 早报：https://v3.alapi.cn/api/zaobao （返回 15 条新闻 + 微语 + 配图，需 alapi_token）。也可换其它 60s 兼容接口。",
+    "default": "https://v3.alapi.cn/api/zaobao"
+  },
+  "news_mode": {
+    "type": "string",
+    "description": "新闻模式：json 或 image",
+    "hint": "json：解析新闻文字列表（并附配图）；image：把 news_api 当成一张图片直接发出（此时 news_api 要填返回图片的接口）。",
+    "default": "json",
+    "options": ["json", "image"]
+  },
+  "news_with_image": {
+    "type": "bool",
+    "description": "json 模式下附带新闻配图",
+    "default": true
+  },
+  "news_max": {
+    "type": "int",
+    "description": "新闻最多显示条数（0 = 全部）",
+    "default": 0
+  },
+  "bangumi_api": {
+    "type": "string",
+    "description": "番剧日历 API（Bangumi）",
+    "hint": "默认使用 Bangumi 官方每日放送接口，返回一周放送表，插件自动取今天。",
+    "default": "https://api.bgm.tv/calendar"
+  },
+  "bangumi_ua": {
+    "type": "string",
+    "description": "Bangumi User-Agent（强烈建议填）",
+    "hint": "Bangumi 要求 UA 为「开发者ID/应用名(项目主页)」格式，否则可能被限流/返回空。建议用你自己的 GitHub 或 Bangumi 用户名，例如：yourname/astrbot-dailyreport (https://github.com/yourname)。留空则用插件内置默认（也合规，但用你自己的更稳）。切勿用 Bangumi/1.0、应用名/版本号 这类被禁格式。",
+    "default": ""
+  },
+  "bangumi_token": {
+    "type": "string",
+    "description": "Bangumi Access Token（可选，更稳）",
+    "hint": "在 https://next.bgm.tv/demo/access-token 申请个人令牌填到这里。带 token 的请求限流更宽松，番剧更不易拿到空数据。番剧接口本身公开、不填也能用。",
+    "default": ""
+  },
+  "anime_max": {
+    "type": "int",
+    "description": "番剧最多显示数量（0 = 全部）",
+    "default": 0
+  },
+  "anime_covers": {
+    "type": "bool",
+    "description": "番剧显示封面图（仅图片卡片）",
+    "hint": "开启后 /日报 卡片里的番剧会显示封面缩略图。封面会下载后内嵌进图片（走 proxy），所以即使渲染用的浏览器不能直连 bgm 也能正常显示。关闭则只显示番名文字。",
+    "default": true
+  },
+  "anime_cover_max": {
+    "type": "int",
+    "description": "番剧封面最多下载几张",
+    "hint": "封面需要逐张下载，太多会拖慢 /日报 生成速度。默认 8。",
+    "default": 8
+  },
+  "anime_image": {
+    "type": "bool",
+    "description": "/今日番剧 用图片卡片输出",
+    "hint": "开启后 /今日番剧（/番剧 /新番）只发一张图片卡片（封面+番名），主题跟随 report_theme（auto 时按时间自动浅色/深色）。关闭则发纯文字列表。封面数量受 anime_cover_max 限制。默认开启。渲染失败会自动退回纯文字。",
+    "default": true
+  },
+  "hotlist_base": {
+    "type": "string",
+    "description": "热榜 API 基址（用站点名拼接时才用到）",
+    "hint": "ALAPI v3 已把热榜拆成每个站点独立端点（如微博 https://v3.alapi.cn/api/new/wbtop），不再是 /api/tophub?type=。所以推荐在下面 hotlist_sources 里直接填每个站点的完整 URL，本项可留默认。若想用「基址+站点名」式的聚合接口，可设为 https://api.vvhan.com/api/hotlist（无需 token，配合 hotlist_sources 用 wbHot/zhihuHot/bili）。",
+    "default": "https://api.vvhan.com/api/hotlist"
+  },
+  "hotlist_sources": {
+    "type": "list",
+    "description": "热榜来源（每行一个）",
+    "hint": "每行可填：①完整 URL（推荐，ALAPI v3 每站一个端点，含 alapi 自动加 token+num）；②『名称|URL』自定义显示名；③站点名（拼到 hotlist_base）。ALAPI v3 微博热搜已确认为 https://v3.alapi.cn/api/new/wbtop ；知乎/B站等请到 alapi.cn 对应产品的「接口文档」页复制各自接口地址，按『知乎|地址』填入。也可整体改用 vvhan：把上面 hotlist_base 设为 https://api.vvhan.com/api/hotlist，本项填 wbHot、zhihuHot、bili（无需 token）。",
+    "default": ["微博热搜|https://v3.alapi.cn/api/new/wbtop"]
+  },
+  "hotlist_count": {
+    "type": "int",
+    "description": "每个热榜显示条数",
+    "default": 5
+  },
+  "timeout": {
+    "type": "int",
+    "description": "单个数据源请求超时（秒）",
+    "default": 20
+  },
+  "proxy": {
+    "type": "string",
+    "description": "HTTP 代理（可选，解决无法直连 Bangumi 等）",
+    "hint": "若服务器无法直连 api.bgm.tv（番剧超时），但你有 Clash/V2Ray 等代理，填本地代理地址，所有请求都会走它。如 http://127.0.0.1:7890 （Clash 默认混合端口）。留空则不走代理（也会尝试读取系统 HTTP(S)_PROXY 环境变量）。注意只支持 http 代理；SOCKS 代理请用 Clash 的混合/http 端口。",
+    "default": ""
+  },
+  "cache_ttl": {
+    "type": "int",
+    "description": "缓存有效期（秒，0=关闭缓存）",
+    "hint": "同一天、该秒数内重复请求 /日报、/每日新闻 等会直接用缓存，不再重复请求接口、不再重复下载番剧封面，显著加快速度、减少 API 调用。默认 900（15 分钟）。新闻/番剧每天更新，设大一些也无妨；热榜变化较快，想更新及时可设小（如 300）。封面按图片地址额外缓存至少 6 小时。设 0 则每次都实时请求。",
+    "default": 900
+  },
+  "show_progress": {
+    "type": "bool",
+    "description": "执行 /日报 时先回一句『正在生成』",
+    "default": true
+  },
+  "push_enabled": {
+    "type": "bool",
+    "description": "启用每日定时推送（需安装 apscheduler）",
+    "hint": "打开后，每天到 push_time 会把日报推送给 push_targets 里的会话。修改后需重载插件生效。",
+    "default": false
+  },
+  "push_time": {
+    "type": "string",
+    "description": "每日推送时间（24 小时制 HH:MM）",
+    "default": "08:00"
+  },
+  "push_targets": {
+    "type": "list",
+    "description": "推送目标会话列表（unified_msg_origin）",
+    "hint": "一般不用手填：在想接收日报的群 / 私聊里发 /日报订阅 即可自动加入（管理员）。格式如 aiocqhttp:GroupMessage:123456。",
+    "default": []
+  }
+}

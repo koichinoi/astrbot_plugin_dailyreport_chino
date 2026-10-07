@@ -52,9 +52,10 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.1.0"
+VERSION = "v2.2.0"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
+REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
 
 
 def _asset_data_uri(filename):
@@ -1248,6 +1249,7 @@ class DailyReportPlugin(Star):
         self.config = config
         self._chino_banner = _asset_data_uri("chino_stationery_banner.webp")
         self._chino_coffee = _asset_data_uri("chino_coffee.webp")
+        self._reimu_art = _asset_data_uri("reimu.webp")
         self._scheduler = None
         self._cache = {}  # key -> (timestamp, value)
         self._setup_scheduler()
@@ -1543,7 +1545,7 @@ class DailyReportPlugin(Star):
         now = datetime.datetime.now()
         d = now.date()
         data = {
-            "title": str(self.config.get("report_title", "") or "智乃的今日日报").strip(),
+            "title": str(self.config.get("report_title", "") or ("灵梦的神社日报" if self._resolve_theme() in ("reimu", "灵梦", "博丽灵梦") else "智乃的今日日报")).strip(),
             "date_main": f"{d.year}年{d.month:02d}月{d.day:02d}日",
             "weekday": WEEK_CN[d.weekday()],
             "calendar": None, "news": None, "anime": None, "hotlists": [],
@@ -1605,7 +1607,13 @@ class DailyReportPlugin(Star):
                 scale = self._render_scale()
                 rdata = dict(data)
                 rdata["scale"] = scale
-                if theme in ("murasame", "丛雨", "从雨"):
+                if theme in ("reimu", "灵梦", "博丽灵梦"):
+                    tmpl = REIMU_TMPL
+                    rdata["reimu_art"] = self._reimu_art
+                    hour = datetime.datetime.now().hour
+                    rdata["reimu_greet"] = "早安，欢迎来到神社。" if hour < 11 else ("午后好，来喝杯茶吧。" if hour < 18 else "晚上好，今天辛苦了。")
+                    rdata["reimu_advice"] = "先把手头的事情做好，累了就坐下来歇一会儿。今天也按自己的节奏来吧。"
+                elif theme in ("murasame", "丛雨", "从雨"):
                     tmpl = MURASAME_TMPL
                     rdata.update(self._murasame_extras(data))
                 elif self._is_night(theme):

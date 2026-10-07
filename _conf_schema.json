@@ -2,14 +2,21 @@
   "report_title": {
     "type": "string",
     "description": "日报标题",
-    "default": "智乃的今日日报"
+    "default": "灵梦的神社日报"
   },
   "report_theme": {
     "type": "string",
     "description": "日报图片主题",
-    "hint": "auto：白天使用 chino 手账主题、夜间自动切换星空 night（夜间时段由 night_start_hour / night_end_hour 决定）；chino：Rabbit House 蓝白手账长海报，内置智乃、提比、咖啡和店铺插画，本地渲染无需联网；night：Rabbit House 星夜深色主题；murasame：丛雨和风神社主题；plain：朴素文字转图。默认 chino。主题失败会自动回退。",
-    "default": "chino",
-    "options": ["auto", "chino", "night", "murasame", "plain"]
+    "hint": "reimu：博丽灵梦浅色神社长日报，朱红、樱粉和淡紫卡片，人物插画离线内嵌。chino：智乃蓝白手账；night：智乃星夜；murasame：丛雨和风；plain：文字转图；auto：白天智乃、夜间星夜。",
+    "default": "reimu",
+    "options": [
+      "auto",
+      "chino",
+      "reimu",
+      "night",
+      "murasame",
+      "plain"
+    ]
   },
   "night_start_hour": {
     "type": "int",
@@ -32,7 +39,7 @@
   "render_scale": {
     "type": "float",
     "description": "渲染精度/缩放（主题卡片）",
-    "hint": "用 CSS 缩放控制图片清晰度，1.0~4.0。数值越大越清晰（图片也越大）。默认 2.0。注意：≥2 时卡片会撑满画布、消掉两侧留白；若你的渲染视口很宽、两侧仍有留白，可调到 2.5~3。觉得图片太大/太糊就在此调整。仅对智乃主题图片生效。",
+    "hint": "主题图片缩放精度，1.0~4.0；建议 2.0。",
     "default": 2.0
   },
   "show_calendar": {
@@ -72,7 +79,10 @@
     "description": "新闻模式：json 或 image",
     "hint": "json：解析新闻文字列表（并附配图）；image：把 news_api 当成一张图片直接发出（此时 news_api 要填返回图片的接口）。",
     "default": "json",
-    "options": ["json", "image"]
+    "options": [
+      "json",
+      "image"
+    ]
   },
   "news_with_image": {
     "type": "bool",
@@ -135,7 +145,9 @@
     "type": "list",
     "description": "热榜来源（每行一个）",
     "hint": "每行可填：①完整 URL（推荐，ALAPI v3 每站一个端点，含 alapi 自动加 token+num）；②『名称|URL』自定义显示名；③站点名（拼到 hotlist_base）。ALAPI v3 微博热搜已确认为 https://v3.alapi.cn/api/new/wbtop ；知乎/B站等请到 alapi.cn 对应产品的「接口文档」页复制各自接口地址，按『知乎|地址』填入。也可整体改用 vvhan：把上面 hotlist_base 设为 https://api.vvhan.com/api/hotlist，本项填 wbHot、zhihuHot、bili（无需 token）。",
-    "default": ["微博热搜|https://v3.alapi.cn/api/new/wbtop"]
+    "default": [
+      "微博热搜|https://v3.alapi.cn/api/new/wbtop"
+    ]
   },
   "hotlist_count": {
     "type": "int",

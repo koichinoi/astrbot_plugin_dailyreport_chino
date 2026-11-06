@@ -58,12 +58,16 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.7.0"
+VERSION = "v2.7.1"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
 TOUHOU_SECTION_TMPL = (PLUGIN_DIR / "templates" / "touhou.html").read_text(encoding="utf-8")
 TOUHOU_EVENTS_SECTION_TMPL = (PLUGIN_DIR / "templates" / "touhou_events.html").read_text(encoding="utf-8")
+TOUHOU_EVENTS_CARD_TMPL = '''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><style>
+*{box-sizing:border-box}html,body{margin:0;background:#fff9f7;font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif}
+.events-wrap{width:820px;zoom:{{ scale|default(2) }};padding:24px}
+</style></head><body><main class="events-wrap">''' + TOUHOU_EVENTS_SECTION_TMPL + '</main></body></html>'
 
 
 def _asset_data_uri(filename):
@@ -1415,7 +1419,41 @@ class DailyReportPlugin(Star):
     async def cmd_touhou_events(self, event: AstrMessageEvent):
         """查看近期国内东方展会，可附加地区关键词。"""
         region = self._strip(event.message_str, {"东方漫展", "东方展会", "东方活动"}).strip()
-        yield event.plain_result(self._touhou_events_text(await self._touhou_events_data(region or None)))
+        data = await self._touhou_events_data(region or None)
+        image = await self._render_touhou_events_card(data)
+        if image:
+            yield event.image_result(image)
+            links = [f"{index}. {item['title']}\n{item['url']}" for index, item in enumerate(data["items"], 1)]
+            yield event.plain_result("活动详情链接：\n" + "\n".join(links))
+        else:
+            yield event.plain_result(self._touhou_events_text(data))
+
+    @filter.command("漫展海报诊断", alias={"东方漫展诊断"})
+    async def cmd_event_cover_diagnose(self, event: AstrMessageEvent):
+        region = self._strip(event.message_str, {"漫展海报诊断", "东方漫展诊断"}).strip()
+        data = await self._touhou_events_data(region or None)
+        enriched = await self._embed_touhou_event_covers({"touhou_events": data})
+        section = enriched["touhou_events"]
+        lines = [f"漫展海报诊断 · 插件 {VERSION}",
+                 f"海报开关：{'开启' if self.config.get('touhou_event_covers', True) else '关闭'}",
+                 f"海报数量上限：{self.config.get('touhou_event_cover_max', 5)}",
+                 section.get("cover_summary", "没有可加载的活动")]
+        if data.get("error"):
+            lines.append(data["error"])
+        for index, item in enumerate(section.get("items", []), 1):
+            lines.append(f"{index}. {item['title']}：{item.get('cover_status', '没有图片状态')}")
+        yield event.plain_result("\n".join(lines))
+
+    async def _render_touhou_events_card(self, data):
+        if not self.config.get("touhou_events_image", True) or not data.get("items"):
+            return None
+        try:
+            values = await self._embed_touhou_event_covers({"touhou_events": data})
+            values["scale"] = self._render_scale()
+            return await self.html_render(TOUHOU_EVENTS_CARD_TMPL, values)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[dailyreport][event-cover] 漫展图片卡片渲染失败：{type(exc).__name__}")
+            return None
 
     @filter.command("东方资讯", alias={"东方新闻", "touhou"})
     async def cmd_touhou(self, event: AstrMessageEvent):
@@ -1731,6 +1769,7 @@ class DailyReportPlugin(Star):
                 {"cmd": "/日报测试", "desc": "立即测试一次推送，验证链路是否正常", "admin": True},
             ]},
             {"title": "🔧 维护", "items": [
+                {"cmd": "/漫展海报诊断", "desc": "检查海报配置、匹配及下载状态", "admin": False},
                 {"cmd": "/日报清缓存", "desc": "清空缓存，下次强制实时拉取", "admin": True},
                 {"cmd": "/日报帮助", "desc": "显示这张菜单（别名 /日报菜单）", "admin": False},
             ]},
@@ -1896,48 +1935,106 @@ class DailyReportPlugin(Star):
 
     async def _embed_touhou_event_covers(self, data):
         section = data.get("touhou_events")
-        if not section or not section.get("items") or not self.config.get("touhou_event_covers", True):
+        if not section or not section.get("items"):
             return data
         result = dict(data)
         result["touhou_events"] = dict(section)
+        output = result["touhou_events"]
         items = [dict(item) for item in section["items"]]
-        result["touhou_events"]["items"] = items
-        height = max(120, min(800, self._to_int(self.config.get("touhou_event_cover_height", 300), 300)))
-        result["touhou_events"]["cover_height"] = height
+        output["items"] = items
+        output["cover_height"] = max(120, min(800, self._to_int(self.config.get("touhou_event_cover_height", 300), 300)))
         count = max(0, min(10, self._to_int(self.config.get("touhou_event_cover_max", 5), 5)))
-        semaphore = asyncio.Semaphore(2)
-        async def load(item):
-            async with semaphore:
+        enabled = self.config.get("touhou_event_covers", True)
+        for item in items:
+            item.pop("cover_img", None)
+            item["cover_status"] = "未加载（超过海报数量上限）" if enabled else "海报功能已关闭"
+        if enabled:
+            semaphore = asyncio.Semaphore(2)
+            async def load(item):
+                async with semaphore:
+                    item["cover_status"] = "海报加载超时"
+                    try:
+                        api = event_page_api(item.get("url", ""))
+                        if not api:
+                            item["cover_status"] = "活动链接缺少可识别的届次"
+                            return
+                        key = "touhou-event-posters:" + api
+                        content = self._cache_get(key, self._cache_ttl())
+                        if content is None:
+                            payload = await self._get_json(api, retries=1)
+                            content = payload.get("parse", {}).get("text")
+                            if isinstance(content, dict):
+                                content = content.get("*")
+                            if not isinstance(content, str) or len(content) > 2_000_000:
+                                item["cover_status"] = "活动详情页没有返回有效内容"
+                                return
+                            self._cache_set(key, content)
+                        urls = event_poster_urls(content, item["url"])
+                        if not urls:
+                            item["cover_status"] = "该届次暂未收录可识别的海报"
+                            return
+                        for url in urls:
+                            image, status = await self._fetch_event_cover(url, item["url"])
+                            item["cover_status"] = status
+                            if image:
+                                item["cover_img"] = image
+                                item["cover_url"] = url
+                                return
+                    except Exception as exc:  # noqa: BLE001
+                        item["cover_status"] = f"海报读取失败（{type(exc).__name__}）"
+            selected = items[:count]
+            for item in selected:
+                item["cover_status"] = "海报等待加载（超时或未完成）"
+            tasks = [asyncio.create_task(load(item)) for item in selected]
+            if tasks:
+                timeout = max(5, min(180, self._to_int(self.config.get("touhou_event_cover_timeout", 60), 60)))
                 try:
-                    api = event_page_api(item.get("url", ""))
-                    if not api:
-                        return
-                    key = "touhou-event-posters:" + api
-                    content = self._cache_get(key, self._cache_ttl())
-                    if content is None:
-                        payload = await self._get_json(api, retries=0)
-                        content = payload.get("parse", {}).get("text")
-                        if isinstance(content, dict):
-                            content = content.get("*")
-                        if not isinstance(content, str) or len(content) > 2_000_000:
-                            return
-                        self._cache_set(key, content)
-                    for url in event_poster_urls(content, item["url"]):
-                        image = await self._fetch_image_b64(url)
-                        if image:
-                            item["cover_img"] = image
-                            item["cover_url"] = url
-                            return
-                except Exception as exc:  # noqa: BLE001 - a missing poster must not hide an event
-                    logger.warning(f"[dailyreport][event-cover] 海报读取失败：{type(exc).__name__}")
-        tasks = [asyncio.create_task(load(item)) for item in items[:count]]
-        if tasks:
-            try:
-                await asyncio.wait_for(asyncio.gather(*tasks), timeout=30)
-            except asyncio.TimeoutError:
-                # Completed posters stay in the copied result; wait_for cancels pending loads.
-                logger.warning("[dailyreport][event-cover] 海报加载超时，保留已完成的图片和活动文字。")
+                    await asyncio.wait_for(asyncio.gather(*tasks), timeout=timeout)
+                except asyncio.TimeoutError:
+                    logger.warning("[dailyreport][event-cover] 海报加载超时，保留已完成的图片和活动文字。")
+        loaded = sum(bool(item.get("cover_img")) for item in items)
+        output["cover_summary"] = f"海报已加载 {loaded}/{len(items)} 场"
+        logger.info(f"[dailyreport][event-cover] {VERSION} {output['cover_summary']}")
+        for item in items:
+            if not item.get("cover_img") and enabled:
+                logger.warning(f"[dailyreport][event-cover] {item.get('title', '')}：{item['cover_status']}")
         return result
+
+    async def _fetch_event_cover(self, url, referer):
+        ttl = self._cache_ttl()
+        key = "event-cover-image:" + url
+        cached = self._cache_get(key, max(ttl, 21600)) if ttl > 0 else None
+        if cached is not None:
+            return cached, "已加载（缓存）"
+        headers = {"User-Agent": BROWSER_UA, "Referer": referer.split("#", 1)[0],
+                   "Accept": "image/webp,image/png,image/jpeg,image/gif,*/*;q=0.5"}
+        proxy = str(self.config.get("proxy", "") or "").strip() or None
+        timeout = aiohttp.ClientTimeout(total=max(1, self._to_int(self.config.get("timeout", 20), 20)))
+        try:
+            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+                async with session.get(url, headers=headers, proxy=proxy) as response:
+                    if response.status != 200:
+                        return "", f"图片下载失败（HTTP {response.status}）"
+                    raw = bytearray()
+                    async for chunk in response.content.iter_chunked(65536):
+                        raw.extend(chunk)
+                        if len(raw) > 4_000_000:
+                            return "", "海报文件超过 4 MB"
+                    raw = bytes(raw)
+                    mime = ("image/webp" if raw.startswith(b"RIFF") and raw[8:12] == b"WEBP" else
+                            "image/png" if raw.startswith(b"\x89PNG\r\n\x1a\n") else
+                            "image/jpeg" if raw.startswith(b"\xff\xd8") else
+                            "image/gif" if raw.startswith((b"GIF87a", b"GIF89a")) else "")
+                    if not mime:
+                        return "", "图片地址没有返回有效海报"
+                    image = f"data:{mime};base64," + base64.b64encode(raw).decode("ascii")
+                    if ttl > 0:
+                        self._cache_set(key, image)
+                    return image, "已加载"
+        except asyncio.TimeoutError:
+            return "", "海报图片下载超时"
+        except Exception as exc:  # noqa: BLE001
+            return "", f"图片连接失败（{type(exc).__name__}）"
 
     async def _fetch_image_b64(self, url):
         """下载图片并转为 data URI；失败返回空串。走配置的 proxy，按 URL 缓存。"""

@@ -2,7 +2,7 @@ name: astrbot_plugin_dailyreport
 display_name: 每日日报
 desc: 聚合每日新闻（ALAPI 早报）、今日番剧（Bangumi）、各站热榜、东方Project资讯与主题漫展、日历/农历黄历的每日日报插件，可整合渲染成一张图片发送（内置离线博丽灵梦和香风智乃插画主题）。支持 /日报 等指令查看、定时推送，并提供 LLM 函数工具 get_daily_report 供人格 AI 主动调用。
 short_desc: 每日新闻/番剧/热榜/日历 日报
-version: v2.7.0
+version: v2.7.1
 author: koichinoi
 repo: https://github.com/koichinoi/astrbot_plugin_dailyreport_chino
 

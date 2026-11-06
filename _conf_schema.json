@@ -283,7 +283,7 @@
   "touhou_event_covers": {
     "type": "bool",
     "description": "东方漫展活动卡片显示海报头图",
-    "hint": "读取 THBWiki 对应届次的官方宣传图并内嵌，适配本地渲染；无匹配海报或下载失败时保留文字。仅影响日报图片。",
+    "hint": "整份日报和单独 /东方漫展 图片卡片均显示海报；加载失败会显示具体状态，可发送 /漫展海报诊断 排查。",
     "default": true
   },
   "touhou_event_cover_max": {
@@ -296,5 +296,17 @@
     "description": "活动海报头图高度（CSS 像素，120–800）",
     "hint": "默认 300，完整显示海报，不裁切宣传文字。最终像素尺寸随 render_scale 放大。",
     "default": 300
+  },
+  "touhou_events_image": {
+    "type": "bool",
+    "description": "单独 /东方漫展 输出图片卡片",
+    "hint": "默认开启，包含海报和活动信息，并附可点击详情链接；关闭后只发文字。",
+    "default": true
+  },
+  "touhou_event_cover_timeout": {
+    "type": "int",
+    "description": "全部活动海报加载总超时（秒，5–180）",
+    "hint": "默认 60 秒；单个请求仍使用通用 timeout。超时后保留已加载图片，并显示其余活动的加载状态。",
+    "default": 60
   }
 }

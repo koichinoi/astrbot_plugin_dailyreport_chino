@@ -125,11 +125,12 @@ class _Posters(HTMLParser):
                     options.append((float(pair[1][:-1]),pair[0]))
         if options:
             src=max(options)[1]
-        src=urljoin("https://thwiki.cc/",src)
-        parts=urlsplit(src)
-        if parts.scheme in ("http","https") and parts.hostname in ("upload.thbwiki.cc","upload.thwiki.cc"):
-            if src not in self.urls:
-                self.urls.append(src)
+        for candidate in (src,attrs.get("src", "")):
+            candidate=urljoin("https://thwiki.cc/",candidate)
+            parts=urlsplit(candidate)
+            if parts.scheme in ("http","https") and parts.hostname in ("upload.thbwiki.cc","upload.thwiki.cc"):
+                if candidate not in self.urls:
+                    self.urls.append(candidate)
     def handle_endtag(self, tag):
         if tag == "li":
             self.in_gallery=False

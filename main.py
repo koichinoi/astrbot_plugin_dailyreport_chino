@@ -13,6 +13,7 @@ from urllib.parse import urlencode, urlsplit
 import aiohttp
 
 from .touhou import DEFAULT_TOUHOU_SOURCES, MAX_FEED_BYTES, parse_feed, select_entries, parse_translations
+from .touhou_events import DEFAULT_EVENTS_API, SCHEDULE_URL, china_today, parse_schedule, filter_events
 
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, MessageChain
@@ -56,11 +57,12 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.4.0"
+VERSION = "v2.5.0"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
 TOUHOU_SECTION_TMPL = (PLUGIN_DIR / "templates" / "touhou.html").read_text(encoding="utf-8")
+TOUHOU_EVENTS_SECTION_TMPL = (PLUGIN_DIR / "templates" / "touhou_events.html").read_text(encoding="utf-8")
 
 
 def _asset_data_uri(filename):
@@ -1397,6 +1399,12 @@ class DailyReportPlugin(Star):
         blocks = [self._hotlist_text(await self._hotlist_data(n)) for n in names]
         yield event.plain_result("\n\n".join(b for b in blocks if b) or "没有获取到热榜数据。")
 
+    @filter.command("东方漫展", alias={"东方展会", "东方活动"})
+    async def cmd_touhou_events(self, event: AstrMessageEvent):
+        """查看近期国内东方展会，可附加地区关键词。"""
+        region = self._strip(event.message_str, {"东方漫展", "东方展会", "东方活动"}).strip()
+        yield event.plain_result(self._touhou_events_text(await self._touhou_events_data(region or None)))
+
     @filter.command("东方资讯", alias={"东方新闻", "touhou"})
     async def cmd_touhou(self, event: AstrMessageEvent):
         """查看最近发布的东方 Project 资讯及原文链接。"""
@@ -1526,7 +1534,7 @@ class DailyReportPlugin(Star):
         '''获取今日日报信息，包含每日新闻、今天更新的番剧、各大平台热榜、以及日历农历。当用户问“今天有什么新闻 / 番剧 / 热搜”“看看日报”“今天黄历 / 农历”等与每日资讯相关的问题时调用。
 
         Args:
-            section(string): 可选，想看的板块：news（新闻）、anime（番剧）、hotlist（热榜）、calendar（日历）、touhou（东方Project资讯）。留空表示全部。
+            section(string): 可选，想看的板块：news（新闻）、anime（番剧）、hotlist（热榜）、calendar（日历）、touhou（东方Project资讯）、touhou_events（东方主题漫展）。留空表示全部。
         '''
         s = (section or "").strip().lower()
         if s in ("news", "新闻"):
@@ -1540,6 +1548,9 @@ class DailyReportPlugin(Star):
         if s in ("hotlist", "热榜", "热搜"):
             blocks = [self._hotlist_text(await self._hotlist_data(n)) for n in self._hotlist_sources()]
             yield event.plain_result("\n\n".join(b for b in blocks if b) or "没有获取到热榜数据。")
+            return
+        if s in ("touhou_events", "东方漫展", "东方展会", "东方活动"):
+            yield event.plain_result(self._touhou_events_text(await self._touhou_events_data()))
             return
         if s in ("touhou", "东方", "东方资讯", "东方新闻"):
             yield event.plain_result(self._touhou_text(await self._touhou_data()))
@@ -1561,7 +1572,7 @@ class DailyReportPlugin(Star):
             "title": str(self.config.get("report_title", "") or ("灵梦的神社日报" if self._resolve_theme() in ("reimu", "灵梦", "博丽灵梦") else "智乃的今日日报")).strip(),
             "date_main": f"{d.year}年{d.month:02d}月{d.day:02d}日",
             "weekday": WEEK_CN[d.weekday()],
-            "calendar": None, "news": None, "anime": None, "hotlists": [], "touhou": None,
+            "calendar": None, "news": None, "anime": None, "hotlists": [], "touhou": None, "touhou_events": None,
         }
         if self.config.get("show_calendar", True):
             data["calendar"] = self._calendar_data()
@@ -1569,6 +1580,8 @@ class DailyReportPlugin(Star):
             data["news"] = await self._news_data()
         if self.config.get("show_anime", True):
             data["anime"] = await self._anime_data()
+        if self.config.get("show_touhou_events", True):
+            data["touhou_events"] = await self._touhou_events_data()
         if self.config.get("show_touhou", True):
             data["touhou"] = await self._touhou_data()
         if self.config.get("show_hotlists", True):
@@ -1640,9 +1653,9 @@ class DailyReportPlugin(Star):
                     rdata["chino_banner"] = self._chino_banner
                     rdata["chino_coffee"] = self._chino_coffee
                 if "<!-- TOUHOU_SECTION -->" in tmpl:
-                    tmpl = tmpl.replace("<!-- TOUHOU_SECTION -->", TOUHOU_SECTION_TMPL)
+                    tmpl = tmpl.replace("<!-- TOUHOU_SECTION -->", TOUHOU_SECTION_TMPL + "\n" + TOUHOU_EVENTS_SECTION_TMPL)
                 else:
-                    tmpl = tmpl.replace("{% if hot_cards %}", TOUHOU_SECTION_TMPL + "\n{% if hot_cards %}", 1)
+                    tmpl = tmpl.replace("{% if hot_cards %}", TOUHOU_SECTION_TMPL + "\n" + TOUHOU_EVENTS_SECTION_TMPL + "\n{% if hot_cards %}", 1)
                 rdata = await self._embed_anime_covers(rdata)
                 url = await self.html_render(tmpl, rdata)
                 if url:
@@ -1678,6 +1691,7 @@ class DailyReportPlugin(Star):
                 {"cmd": "/日报", "desc": "完整今日日报卡片（新闻+番剧+热榜+运势+咖啡）", "admin": False},
                 {"cmd": "/每日新闻", "desc": "每日 60 秒早报", "admin": False},
                 {"cmd": "/今日番剧", "desc": "今天更新的番剧 · 封面图卡", "admin": False},
+                {"cmd": "/东方漫展 [地区]", "desc": "近期东方 Only／展会，支持地区筛选", "admin": False},
                 {"cmd": "/东方资讯", "desc": "最近的东方 Project 资讯与原文链接", "admin": False},
                 {"cmd": "/热榜", "desc": "微博/知乎等各站热榜聚合", "admin": False},
                 {"cmd": "/日历", "desc": "今日黄历 · 宜忌 · 运势", "admin": False},
@@ -1900,6 +1914,8 @@ class DailyReportPlugin(Star):
             parts.append(self._news_text(data["news"]))
         if data.get("anime"):
             parts.append(self._anime_text(data["anime"]))
+        if data.get("touhou_events"):
+            parts.append(self._touhou_events_text(data["touhou_events"]))
         if data.get("touhou"):
             parts.append(self._touhou_text(data["touhou"]))
         for hl in data.get("hotlists", []):
@@ -2347,6 +2363,55 @@ class DailyReportPlugin(Star):
                 msg = data.get("msg") or data.get("message") or ""
                 return f"ALAPI {code}{('：' + str(msg)) if msg else ''}"
         return None
+
+    async def _touhou_events_data(self, region_override=None):
+        def terms(value):
+            if isinstance(value, str):
+                return [word.strip() for word in re.split(r"[,，、|\s]+", value) if word.strip()]
+            return [str(word).strip() for word in (value or []) if str(word).strip()]
+        regions = terms(self.config.get("touhou_event_regions", []))
+        if region_override is not None:
+            regions = [] if region_override.strip() in ("全部", "全国") else terms(region_override)
+        types = terms(self.config.get("touhou_event_types", ["展会"]))
+        days = max(1, min(365, self._to_int(self.config.get("touhou_event_days", 60), 60)))
+        limit = max(1, min(20, self._to_int(self.config.get("touhou_event_max", 5), 5)))
+        today = china_today()
+        result = {"items": [], "error": None, "days": days,
+                  "region_label": "、".join(regions) or "全国",
+                  "type_label": "、".join(types) or "全部类型",
+                  "checked_date": today.isoformat()}
+        url = str(self.config.get("touhou_events_api", "") or DEFAULT_EVENTS_API).strip()
+        try:
+            if urlsplit(url).scheme.lower() not in ("http", "https") or not urlsplit(url).netloc:
+                raise ValueError("活动接口必须是 HTTP(S) URL")
+            key = "touhou-events:raw:" + url
+            events = self._cache_get(key, self._cache_ttl())
+            if events is None:
+                payload = await self._get_json(url)
+                content = payload.get("parse", {}).get("text")
+                if isinstance(content, dict):
+                    content = content.get("*")
+                events = parse_schedule(content)
+                self._cache_set(key, events)
+            # Refilter against the current China date, even when raw data was cached yesterday.
+            result["items"] = filter_events(events, today=today, days=days, limit=limit, regions=regions, types=types)
+        except Exception as exc:  # noqa: BLE001 - keep other report sections available
+            logger.warning(f"[dailyreport][touhou-events] 日程读取失败：{type(exc).__name__}")
+            result["error"] = f"活动日程读取失败（{type(exc).__name__}）"
+        return result
+
+    @staticmethod
+    def _touhou_events_text(data):
+        lines = ["【东方 Only／主题漫展】", f"未来 {data['days']} 天 · 国内 · {data['region_label']} · 类型：{data['type_label']}"]
+        if data.get("error"):
+            lines.append(data["error"])
+        elif not data["items"]:
+            lines.append("当前来源在此日期和地区范围内暂无已收录的展会。")
+        for index, item in enumerate(data["items"], 1):
+            countdown = "今天" if item["days_left"] == 0 else f"还有 {item['days_left']} 天"
+            lines.append(f"{index}. {item['title']}\n{item['date']} · {countdown} · {item['kind']}\n地点：{item['location']}\n详情：{item['url']}")
+        lines.append(f"来源：THBWiki 日程表 · {data['checked_date']} 查询\n{SCHEDULE_URL}\n出发前请查看详情确认安排。")
+        return "\n".join(lines)
 
     async def _touhou_feed(self, url):
         if urlsplit(url).scheme.lower() not in ("http", "https") or not urlsplit(url).netloc:

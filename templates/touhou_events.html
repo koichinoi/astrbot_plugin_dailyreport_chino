@@ -1,0 +1,15 @@
+{% if touhou_events %}
+<section style="margin:0 0 20px;padding:18px;border:2px solid #fff;border-radius:19px;background:#e7f0fa;color:#5c667e;box-sizing:border-box;">
+  <h3 style="font-size:18px;line-height:1.5;margin:0 0 12px;color:#637da2;">✿ 东方 Only／主题漫展 <span style="font-size:10px;font-weight:normal;">TOUHOU / EVENTS</span></h3>
+  <p style="font-size:11px;line-height:1.7;margin:0 0 12px;">未来 {{ touhou_events.days }} 天 · 国内 · {{ touhou_events.region_label|e }} · 类型：{{ touhou_events.type_label|e }}</p>
+  {% for entry in touhou_events['items'] %}
+  <article style="padding:13px 15px;margin-bottom:9px;border:1px solid #fff;border-radius:12px;background:#ffffffd9;overflow-wrap:anywhere;">
+    <div style="font-size:14px;line-height:1.8;">{{ loop.index }}. {{ entry.title|e }}</div>
+    <div style="font-size:12px;line-height:1.8;color:#7a8eac;">{{ entry.date|e }} · {% if entry.days_left == 0 %}今天{% else %}还有 {{ entry.days_left }} 天{% endif %} · {{ entry.kind|e }}</div>
+    <div style="font-size:12px;line-height:1.8;">地点：{{ entry.location|e }}</div>
+    <div style="font-size:10px;line-height:1.7;word-break:break-all;">详情：<a style="color:#718cae;" href="{{ entry.url|e }}">{{ entry.url|e }}</a></div>
+  </article>
+  {% else %}<div style="font-size:13px;line-height:1.8;">{% if touhou_events.error %}获取失败：{{ touhou_events.error|e }}{% else %}当前来源在此日期和地区范围内暂无已收录的展会。{% endif %}</div>{% endfor %}
+  <p style="font-size:10px;line-height:1.8;margin:10px 0 0;">来源：THBWiki 日程表 · {{ touhou_events.checked_date|e }} 查询 · 出发前请查看详情确认安排。<br>发送 /东方漫展 可获取可点击的详情链接；支持 /东方漫展 浙江。</p>
+</section>
+{% endif %}

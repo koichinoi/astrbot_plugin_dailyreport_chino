@@ -232,5 +232,40 @@
     "type": "int",
     "description": "东方资讯翻译超时（秒，5–120）",
     "default": 45
+  },
+  "show_touhou_events": {
+    "type": "bool",
+    "description": "日报包含东方 Only／主题漫展",
+    "default": true
+  },
+  "touhou_event_days": {
+    "type": "int",
+    "description": "东方漫展向后查询多少天（1–365）",
+    "default": 60
+  },
+  "touhou_event_max": {
+    "type": "int",
+    "description": "东方漫展最多显示多少场（1–20）",
+    "default": 5
+  },
+  "touhou_event_regions": {
+    "type": "list",
+    "description": "东方漫展地区关键词（留空全国）",
+    "hint": "例如填 浙江、台州、杭州、上海；多个关键词之间为或关系。在来源地点或活动名称中匹配。可单独发送 /东方漫展 浙江，或 /东方漫展 全国。",
+    "default": []
+  },
+  "touhou_event_types": {
+    "type": "list",
+    "description": "东方活动类型（留空包含全部类型）",
+    "hint": "默认只显示展会（含聚会/展会等混合类型）。想看茶会/同好聚会可增加 聚会；也支持 LIVE、音乐会 等来源类型。",
+    "default": [
+      "展会"
+    ]
+  },
+  "touhou_events_api": {
+    "type": "string",
+    "description": "东方漫展日程接口（THBWiki MediaWiki Parse JSON）",
+    "hint": "使用 THBWiki 日程表 API；沿用 proxy、timeout、cache_ttl，自动过滤已过期与非中国地区活动。",
+    "default": "https://thwiki.cc/api.php?action=parse&page=%E6%97%A5%E7%A8%8B%E8%A1%A8&prop=text&format=json&formatversion=2"
   }
 }

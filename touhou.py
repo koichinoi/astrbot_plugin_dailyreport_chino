@@ -1,5 +1,6 @@
 """RSS / Atom parsing for the Touhou news section (stdlib only)."""
 import datetime
+import json
 from email.utils import parsedate_to_datetime
 from html import unescape
 from html.parser import HTMLParser
@@ -81,3 +82,26 @@ def select_entries(entries, limit):
         if len(result) >= limit:
             break
     return result
+
+def parse_translations(content, count):
+    """Validate the complete indexed batch before using any translated title."""
+    text = (content or "").strip()
+    if len(text) > 30000:
+        raise ValueError("翻译返回内容过长")
+    if text.startswith("```") and text.endswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    values = json.loads(text)
+    if not isinstance(values, list) or len(values) != count:
+        raise ValueError("翻译条数不匹配")
+    result = {}
+    for item in values:
+        if not isinstance(item, dict) or type(item.get("id")) is not int:
+            raise ValueError("翻译条目缺少编号")
+        index, title = item["id"], item.get("title")
+        if index in result or not 0 <= index < count or not isinstance(title, str):
+            raise ValueError("翻译编号或标题无效")
+        title = _plain(title)
+        if not title or len(title) > 500:
+            raise ValueError("翻译标题为空或过长")
+        result[index] = title
+    return [result[index] for index in range(count)]

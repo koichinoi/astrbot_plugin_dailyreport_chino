@@ -206,9 +206,31 @@
   "touhou_sources": {
     "type": "list",
     "description": "东方资讯 RSS / Atom 来源",
-    "hint": "每行填写 名称|RSS地址 或直接填写 RSS/Atom 地址，最多读取 4 个来源。默认东方四方山新闻（日文原文），可换成中文订阅；按日期排序、原文链接去重，不会自动翻译。留空恢复默认。沿用 timeout / proxy / cache_ttl 配置。",
+    "hint": "每行填写 名称|RSS地址 或直接填写 RSS/Atom 地址，最多读取 4 个来源。默认东方四方山新闻（日文原文），可换成中文订阅；按日期排序、原文链接去重，翻译由 touhou_translate 控制。留空恢复默认。沿用 timeout / proxy / cache_ttl 配置。",
     "default": [
       "东方四方山新闻（日文原文）|https://touhou-project.news/feed.rss"
     ]
+  },
+  "touhou_translate": {
+    "type": "bool",
+    "description": "东方资讯标题翻译成简体中文",
+    "hint": "使用 AstrBot 已配置的聊天模型批量翻译并缓存；没有模型或翻译失败时显示原文。",
+    "default": true
+  },
+  "touhou_translation_provider_id": {
+    "type": "string",
+    "description": "东方资讯翻译模型的 Provider ID（可选）",
+    "hint": "留空使用 AstrBot 全局默认聊天模型；也可填写已配置的聊天模型 Provider ID。命令和定时推送使用同一设置。",
+    "default": ""
+  },
+  "touhou_translation_show_original": {
+    "type": "bool",
+    "description": "翻译后同时显示原标题",
+    "default": true
+  },
+  "touhou_translation_timeout": {
+    "type": "int",
+    "description": "东方资讯翻译超时（秒，5–120）",
+    "default": 45
   }
 }

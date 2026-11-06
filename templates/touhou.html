@@ -1,10 +1,12 @@
 {% if touhou %}
 <section style="margin:0 0 20px;padding:18px;border:2px solid #fff;border-radius:19px;background:#f9e5e9;color:#705460;box-sizing:border-box;">
   <h3 style="font-size:18px;line-height:1.5;margin:0 0 12px;color:#a74f68;">✿ 东方 Project 资讯 <span style="font-size:10px;font-weight:normal;">TOUHOU / NEWS</span></h3>
-  <p style="font-size:11px;line-height:1.7;margin:0 0 12px;">最近发布的资讯 · 保留来源原文 · 非仅限今天</p>
+  <p style="font-size:11px;line-height:1.7;margin:0 0 12px;">最近发布的资讯 · 非仅限今天</p>
+  {% if touhou.translation_note %}<p style="font-size:11px;line-height:1.7;">{{ touhou.translation_note|e }}</p>{% endif %}
   {% for entry in touhou['items'] %}
   <article style="padding:13px 15px;margin-bottom:9px;border:1px solid #fff;border-radius:12px;background:#fffafbe8;overflow-wrap:anywhere;">
-    <div style="font-size:14px;line-height:1.8;">{{ loop.index }}. {{ entry.title|e }}</div>
+    <div style="font-size:14px;line-height:1.8;">{{ loop.index }}. {{ (entry.translated_title or entry.title)|e }}{% if entry.translated_title %}<span style="font-size:10px;color:#b48798;"> · 中文译文</span>{% endif %}</div>
+    {% if entry.translated_title and touhou.show_original %}<div style="font-size:11px;line-height:1.7;color:#987c88;">原文：{{ entry.title|e }}</div>{% endif %}
     <div style="font-size:11px;line-height:1.8;color:#987c88;">{{ entry.date|e }} · {{ entry.source|e }}</div>
     <div style="font-size:10px;line-height:1.7;word-break:break-all;">原文：<a style="color:#a7667c;" href="{{ entry.url|e }}">{{ entry.url|e }}</a></div>
   </article>

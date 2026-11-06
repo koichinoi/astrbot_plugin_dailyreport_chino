@@ -11,7 +11,7 @@ from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('poster_events',ROOT/'touhou_events.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-ns=dict(module.__dict__,asyncio=asyncio,base64=base64,logger=logging.getLogger('poster-test'),VERSION='v2.7.1',BROWSER_UA='test-browser',AstrMessageEvent=object)
+ns=dict(module.__dict__,asyncio=asyncio,base64=base64,logger=logging.getLogger('poster-test'),VERSION='v2.7.2',BROWSER_UA='test-browser',AstrMessageEvent=object)
 tree=ast.parse((ROOT/'main.py').read_text(encoding='utf-8'))
 plugin=next(node for node in tree.body if isinstance(node,ast.ClassDef))
 methods=[node for node in plugin.body if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name in {'_embed_touhou_event_covers','_fetch_event_cover','_render_touhou_events_card','cmd_touhou_events','_touhou_events_text','_to_int'}]
@@ -45,13 +45,15 @@ class PosterTests(unittest.IsolatedAsyncioTestCase):
         async def gather(region):requests.append(region);return data
         async def render(template,values):
             self.assertIn('events-wrap',template)
+            self.assertIn('{{ entry.url|e }}',template)
+            self.assertEqual(values['touhou_events']['items'][0]['url'],URL)
             self.assertTrue(values['touhou_events']['items'][0]['cover_img'].startswith('data:'))
             return 'rendered-image'
         h._touhou_events_data=gather;h.html_render=render;h._render_scale=lambda:2
         h._strip=lambda message,names:message.split(' ',1)[1]
         event=SimpleNamespace(message_str='/东方漫展 浙江',image_result=lambda value:('image',value),plain_result=lambda value:('text',value))
         responses=[r async for r in h.cmd_touhou_events(event)]
-        self.assertEqual(requests,['浙江']);self.assertEqual(responses[0],('image','rendered-image'));self.assertIn(URL,responses[1][1])
+        self.assertEqual(requests,['浙江']);self.assertEqual(responses[0],('image','rendered-image'));self.assertEqual(len(responses),1)
         h.config['touhou_events_image']=False
         responses=[r async for r in h.cmd_touhou_events(event)]
         self.assertEqual(len(responses),1);self.assertEqual(responses[0][0],'text')

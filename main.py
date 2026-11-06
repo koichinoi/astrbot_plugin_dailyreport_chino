@@ -58,7 +58,7 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.7.1"
+VERSION = "v2.7.2"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
@@ -1423,8 +1423,6 @@ class DailyReportPlugin(Star):
         image = await self._render_touhou_events_card(data)
         if image:
             yield event.image_result(image)
-            links = [f"{index}. {item['title']}\n{item['url']}" for index, item in enumerate(data["items"], 1)]
-            yield event.plain_result("活动详情链接：\n" + "\n".join(links))
         else:
             yield event.plain_result(self._touhou_events_text(data))
 

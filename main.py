@@ -6,9 +6,11 @@ import mimetypes
 import re
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import aiohttp
+
+from .touhou import DEFAULT_TOUHOU_SOURCES, MAX_FEED_BYTES, parse_feed, select_entries
 
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, MessageChain
@@ -52,10 +54,11 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.2.2"
+VERSION = "v2.3.0"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
+TOUHOU_SECTION_TMPL = (PLUGIN_DIR / "templates" / "touhou.html").read_text(encoding="utf-8")
 
 
 def _asset_data_uri(filename):
@@ -1392,6 +1395,11 @@ class DailyReportPlugin(Star):
         blocks = [self._hotlist_text(await self._hotlist_data(n)) for n in names]
         yield event.plain_result("\n\n".join(b for b in blocks if b) or "没有获取到热榜数据。")
 
+    @filter.command("东方资讯", alias={"东方新闻", "touhou"})
+    async def cmd_touhou(self, event: AstrMessageEvent):
+        """查看最近发布的东方 Project 资讯及原文链接。"""
+        yield event.plain_result(self._touhou_text(await self._touhou_data()))
+
     @filter.command("日历", alias={"calendar", "黄历", "今日日历", "今日黄历"})
     async def cmd_calendar(self, event: AstrMessageEvent):
         """今日日历 / 农历 / 黄历。"""
@@ -1516,7 +1524,7 @@ class DailyReportPlugin(Star):
         '''获取今日日报信息，包含每日新闻、今天更新的番剧、各大平台热榜、以及日历农历。当用户问“今天有什么新闻 / 番剧 / 热搜”“看看日报”“今天黄历 / 农历”等与每日资讯相关的问题时调用。
 
         Args:
-            section(string): 可选，想看的板块：news（新闻）、anime（番剧）、hotlist（热榜）、calendar（日历）。留空表示全部。
+            section(string): 可选，想看的板块：news（新闻）、anime（番剧）、hotlist（热榜）、calendar（日历）、touhou（东方Project资讯）。留空表示全部。
         '''
         s = (section or "").strip().lower()
         if s in ("news", "新闻"):
@@ -1530,6 +1538,9 @@ class DailyReportPlugin(Star):
         if s in ("hotlist", "热榜", "热搜"):
             blocks = [self._hotlist_text(await self._hotlist_data(n)) for n in self._hotlist_sources()]
             yield event.plain_result("\n\n".join(b for b in blocks if b) or "没有获取到热榜数据。")
+            return
+        if s in ("touhou", "东方", "东方资讯", "东方新闻"):
+            yield event.plain_result(self._touhou_text(await self._touhou_data()))
             return
         if s in ("calendar", "日历", "黄历"):
             yield event.plain_result(self._calendar_text(self._calendar_data()))
@@ -1548,7 +1559,7 @@ class DailyReportPlugin(Star):
             "title": str(self.config.get("report_title", "") or ("灵梦的神社日报" if self._resolve_theme() in ("reimu", "灵梦", "博丽灵梦") else "智乃的今日日报")).strip(),
             "date_main": f"{d.year}年{d.month:02d}月{d.day:02d}日",
             "weekday": WEEK_CN[d.weekday()],
-            "calendar": None, "news": None, "anime": None, "hotlists": [],
+            "calendar": None, "news": None, "anime": None, "hotlists": [], "touhou": None,
         }
         if self.config.get("show_calendar", True):
             data["calendar"] = self._calendar_data()
@@ -1556,6 +1567,8 @@ class DailyReportPlugin(Star):
             data["news"] = await self._news_data()
         if self.config.get("show_anime", True):
             data["anime"] = await self._anime_data()
+        if self.config.get("show_touhou", True):
+            data["touhou"] = await self._touhou_data()
         if self.config.get("show_hotlists", True):
             for n in self._hotlist_sources():
                 data["hotlists"].append(await self._hotlist_data(n))
@@ -1624,6 +1637,10 @@ class DailyReportPlugin(Star):
                     rdata.update(self._rabbit_extras(data))
                     rdata["chino_banner"] = self._chino_banner
                     rdata["chino_coffee"] = self._chino_coffee
+                if "<!-- TOUHOU_SECTION -->" in tmpl:
+                    tmpl = tmpl.replace("<!-- TOUHOU_SECTION -->", TOUHOU_SECTION_TMPL)
+                else:
+                    tmpl = tmpl.replace("{% if hot_cards %}", TOUHOU_SECTION_TMPL + "\n{% if hot_cards %}", 1)
                 rdata = await self._embed_anime_covers(rdata)
                 url = await self.html_render(tmpl, rdata)
                 if url:
@@ -1659,6 +1676,7 @@ class DailyReportPlugin(Star):
                 {"cmd": "/日报", "desc": "完整今日日报卡片（新闻+番剧+热榜+运势+咖啡）", "admin": False},
                 {"cmd": "/每日新闻", "desc": "每日 60 秒早报", "admin": False},
                 {"cmd": "/今日番剧", "desc": "今天更新的番剧 · 封面图卡", "admin": False},
+                {"cmd": "/东方资讯", "desc": "最近的东方 Project 资讯与原文链接", "admin": False},
                 {"cmd": "/热榜", "desc": "微博/知乎等各站热榜聚合", "admin": False},
                 {"cmd": "/日历", "desc": "今日黄历 · 宜忌 · 运势", "admin": False},
             ]},
@@ -1880,6 +1898,8 @@ class DailyReportPlugin(Star):
             parts.append(self._news_text(data["news"]))
         if data.get("anime"):
             parts.append(self._anime_text(data["anime"]))
+        if data.get("touhou"):
+            parts.append(self._touhou_text(data["touhou"]))
         for hl in data.get("hotlists", []):
             parts.append(self._hotlist_text(hl))
         return "\n\n".join(p for p in parts if p)
@@ -2326,6 +2346,65 @@ class DailyReportPlugin(Star):
                 return f"ALAPI {code}{('：' + str(msg)) if msg else ''}"
         return None
 
+    async def _touhou_feed(self, url):
+        if urlsplit(url).scheme.lower() not in ("http", "https") or not urlsplit(url).netloc:
+            raise ValueError("订阅地址必须是 HTTP(S) URL")
+        timeout = aiohttp.ClientTimeout(total=max(1, min(60, self._to_int(self.config.get("timeout", 20), 20))))
+        proxy = str(self.config.get("proxy", "") or "").strip() or None
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            async with session.get(url, headers={"User-Agent": _UA, "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml"}, proxy=proxy) as response:
+                response.raise_for_status()
+                raw = bytearray()
+                async for chunk in response.content.iter_chunked(65536):
+                    raw.extend(chunk)
+                    if len(raw) > MAX_FEED_BYTES:
+                        raise ValueError("订阅内容超过 2 MB")
+                return bytes(raw)
+
+    async def _touhou_data(self):
+        sources = self.config.get("touhou_sources", DEFAULT_TOUHOU_SOURCES)
+        if not sources:
+            sources = DEFAULT_TOUHOU_SOURCES
+        if isinstance(sources, str):
+            sources = [sources]
+        sources = list(sources)[:4]
+        limit = max(1, min(20, self._to_int(self.config.get("touhou_max", 5), 5)))
+        ttl = self._cache_ttl()
+        key = "touhou:" + repr((sources, limit))
+        cached = self._cache_get(key, ttl)
+        if cached is not None:
+            return cached
+        entries, warnings = [], []
+        for source in sources:
+            name, sep, url = str(source).partition("|")
+            if not sep:
+                url, name = name, "东方 Project 订阅"
+            name, url = name.strip() or "东方 Project 订阅", url.strip()
+            try:
+                entries.extend(parse_feed(await self._touhou_feed(url), name, url))
+            except Exception as exc:  # noqa: BLE001 - isolate each source
+                warnings.append(f"{name}（{type(exc).__name__}）")
+                logger.warning(f"[dailyreport][touhou] {name} 读取失败：{type(exc).__name__}")
+        items = select_entries(entries, limit)
+        result = {"items": items, "warnings": warnings,
+                  "error": "；".join(warnings) if warnings and not items else None}
+        if not result["error"]:
+            self._cache_set(key, result)
+        return result
+
+    @staticmethod
+    def _touhou_text(data):
+        lines = ["【东方 Project 资讯】", "最近发布的资讯（保留来源原文，非仅限今天）"]
+        if data.get("error"):
+            lines.append("获取失败：" + data["error"])
+        elif not data.get("items"):
+            lines.append("订阅源暂无资讯。")
+        for index, entry in enumerate(data.get("items", []), 1):
+            lines.append(f"{index}. {entry['title']}\n{entry['date']} · {entry['source']}\n{entry['url']}")
+        if data.get("items") and data.get("warnings"):
+            lines.append("部分订阅源暂不可用，以上为成功读取的内容。")
+        return "\n".join(lines)
+
     async def _get_json(self, url, ua=None, retries=1, extra_headers=None, proxy=None):
         timeout = aiohttp.ClientTimeout(total=self._to_int(self.config.get("timeout", 20), 20))
         headers = {"User-Agent": ua or _UA, "Accept": "application/json, text/plain, */*"}
@@ -2409,3 +2488,4 @@ class DailyReportPlugin(Star):
                 self._scheduler = None
         except Exception:  # noqa: BLE001
             pass
+

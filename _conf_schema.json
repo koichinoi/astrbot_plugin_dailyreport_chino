@@ -192,5 +192,23 @@
     "description": "推送目标会话列表（unified_msg_origin）",
     "hint": "一般不用手填：在想接收日报的群 / 私聊里发 /日报订阅 即可自动加入（管理员）。格式如 aiocqhttp:GroupMessage:123456。",
     "default": []
+  },
+  "show_touhou": {
+    "type": "bool",
+    "description": "日报包含东方 Project 资讯",
+    "default": true
+  },
+  "touhou_max": {
+    "type": "int",
+    "description": "东方资讯最多显示条数（1–20）",
+    "default": 5
+  },
+  "touhou_sources": {
+    "type": "list",
+    "description": "东方资讯 RSS / Atom 来源",
+    "hint": "每行填写 名称|RSS地址 或直接填写 RSS/Atom 地址，最多读取 4 个来源。默认东方四方山新闻（日文原文），可换成中文订阅；按日期排序、原文链接去重，不会自动翻译。留空恢复默认。沿用 timeout / proxy / cache_ttl 配置。",
+    "default": [
+      "东方四方山新闻（日文原文）|https://touhou-project.news/feed.rss"
+    ]
   }
 }

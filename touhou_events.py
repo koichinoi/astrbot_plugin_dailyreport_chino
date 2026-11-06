@@ -2,7 +2,7 @@
 import datetime
 from html.parser import HTMLParser
 import re
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, unquote, urlencode, parse_qs
 
 SCHEDULE_URL = "https://thwiki.cc/%E6%97%A5%E7%A8%8B%E8%A1%A8"
 DEFAULT_EVENTS_API = "https://thwiki.cc/api.php?action=parse&page=%E6%97%A5%E7%A8%8B%E8%A1%A8&prop=text&format=json&formatversion=2"
@@ -80,3 +80,63 @@ def filter_events(events, *, today=None, days=60, limit=5, regions=(), types=("�
         if len(result)>=limit:
             break
     return result
+
+def event_page_api(event_url):
+    parts=urlsplit(event_url)
+    if parts.hostname not in ("thwiki.cc", "www.thwiki.cc", "thbwiki.cc", "www.thbwiki.cc"):
+        return ""
+    title=unquote(parts.path.lstrip("/"))
+    if title == "index.php":
+        title=parse_qs(parts.query).get("title", [""])[0]
+    if not title or not re.fullmatch(r"ev-\d+", parts.fragment):
+        return ""
+    return "https://thwiki.cc/api.php?"+urlencode(dict(action="parse",page=title,prop="text",format="json",formatversion=2))
+
+def _edition(value):
+    if value.isdigit():
+        return int(value)
+    digits={char:index for index,char in enumerate("零一二三四五六七八九")}
+    if "十" in value:
+        left,right=value.split("十",1)
+        if (not left or left in digits) and (not right or right in digits):
+            return (digits[left] if left else 1)*10+(digits[right] if right else 0)
+    return digits.get(value)
+
+class _Posters(HTMLParser):
+    def __init__(self, edition):
+        super().__init__();self.edition=edition;self.in_gallery=False;self.urls=[]
+    def handle_starttag(self, tag, attrs):
+        attrs=dict(attrs)
+        if tag == "li" and "gallerybox" in attrs.get("class", "").split():
+            self.in_gallery=True
+        if tag != "img" or not self.in_gallery:
+            return
+        alt=attrs.get("alt", "")
+        match=re.search(r"第?([0-9零一二三四五六七八九十]+)届",alt)
+        if not match or _edition(match.group(1)) != self.edition:
+            return
+        # Select only a URL actually advertised by the source, up to its 2x thumbnail.
+        src=attrs.get("src", "")
+        options=[]
+        for value in attrs.get("srcset", "").split(","):
+            pair=value.strip().rsplit(None,1)
+            if len(pair)==2 and re.fullmatch(r"[0-9]+(?:\.[0-9]+)?x",pair[1]):
+                if float(pair[1][:-1]) <= 2:
+                    options.append((float(pair[1][:-1]),pair[0]))
+        if options:
+            src=max(options)[1]
+        src=urljoin("https://thwiki.cc/",src)
+        parts=urlsplit(src)
+        if parts.scheme in ("http","https") and parts.hostname in ("upload.thbwiki.cc","upload.thwiki.cc"):
+            if src not in self.urls:
+                self.urls.append(src)
+    def handle_endtag(self, tag):
+        if tag == "li":
+            self.in_gallery=False
+
+def event_poster_urls(html, event_url):
+    match=re.fullmatch(r"ev-(\d+)",urlsplit(event_url).fragment)
+    if not match or not isinstance(html,str) or len(html)>2_000_000:
+        return []
+    parser=_Posters(int(match.group(1)));parser.feed(html)
+    return parser.urls[:2]

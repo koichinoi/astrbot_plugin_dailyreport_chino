@@ -13,7 +13,7 @@ from urllib.parse import urlencode, urlsplit
 import aiohttp
 
 from .touhou import DEFAULT_TOUHOU_SOURCES, MAX_FEED_BYTES, parse_feed, select_entries, parse_translations
-from .touhou_events import DEFAULT_EVENTS_API, SCHEDULE_URL, china_today, parse_schedule, filter_events
+from .touhou_events import DEFAULT_EVENTS_API, SCHEDULE_URL, china_today, parse_schedule, filter_events, event_page_api, event_poster_urls
 from .subscriptions import config_entries, manual_targets, resolve_groups
 
 from astrbot.api import logger, AstrBotConfig
@@ -58,7 +58,7 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.6.0"
+VERSION = "v2.7.0"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
@@ -1684,6 +1684,7 @@ class DailyReportPlugin(Star):
                 else:
                     tmpl = tmpl.replace("{% if hot_cards %}", TOUHOU_SECTION_TMPL + "\n" + TOUHOU_EVENTS_SECTION_TMPL + "\n{% if hot_cards %}", 1)
                 rdata = await self._embed_anime_covers(rdata)
+                rdata = await self._embed_touhou_event_covers(rdata)
                 url = await self.html_render(tmpl, rdata)
                 if url:
                     return url
@@ -1892,6 +1893,51 @@ class DailyReportPlugin(Star):
         data = dict(data)
         data["anime"] = na
         return data
+
+    async def _embed_touhou_event_covers(self, data):
+        section = data.get("touhou_events")
+        if not section or not section.get("items") or not self.config.get("touhou_event_covers", True):
+            return data
+        result = dict(data)
+        result["touhou_events"] = dict(section)
+        items = [dict(item) for item in section["items"]]
+        result["touhou_events"]["items"] = items
+        height = max(120, min(800, self._to_int(self.config.get("touhou_event_cover_height", 300), 300)))
+        result["touhou_events"]["cover_height"] = height
+        count = max(0, min(10, self._to_int(self.config.get("touhou_event_cover_max", 5), 5)))
+        semaphore = asyncio.Semaphore(2)
+        async def load(item):
+            async with semaphore:
+                try:
+                    api = event_page_api(item.get("url", ""))
+                    if not api:
+                        return
+                    key = "touhou-event-posters:" + api
+                    content = self._cache_get(key, self._cache_ttl())
+                    if content is None:
+                        payload = await self._get_json(api, retries=0)
+                        content = payload.get("parse", {}).get("text")
+                        if isinstance(content, dict):
+                            content = content.get("*")
+                        if not isinstance(content, str) or len(content) > 2_000_000:
+                            return
+                        self._cache_set(key, content)
+                    for url in event_poster_urls(content, item["url"]):
+                        image = await self._fetch_image_b64(url)
+                        if image:
+                            item["cover_img"] = image
+                            item["cover_url"] = url
+                            return
+                except Exception as exc:  # noqa: BLE001 - a missing poster must not hide an event
+                    logger.warning(f"[dailyreport][event-cover] 海报读取失败：{type(exc).__name__}")
+        tasks = [asyncio.create_task(load(item)) for item in items[:count]]
+        if tasks:
+            try:
+                await asyncio.wait_for(asyncio.gather(*tasks), timeout=30)
+            except asyncio.TimeoutError:
+                # Completed posters stay in the copied result; wait_for cancels pending loads.
+                logger.warning("[dailyreport][event-cover] 海报加载超时，保留已完成的图片和活动文字。")
+        return result
 
     async def _fetch_image_b64(self, url):
         """下载图片并转为 data URI；失败返回空串。走配置的 proxy，按 URL 缓存。"""

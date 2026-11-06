@@ -279,5 +279,22 @@
     "description": "东方漫展日程接口（THBWiki MediaWiki Parse JSON）",
     "hint": "使用 THBWiki 日程表 API；沿用 proxy、timeout、cache_ttl，自动过滤已过期与非中国地区活动。",
     "default": "https://thwiki.cc/api.php?action=parse&page=%E6%97%A5%E7%A8%8B%E8%A1%A8&prop=text&format=json&formatversion=2"
+  },
+  "touhou_event_covers": {
+    "type": "bool",
+    "description": "东方漫展活动卡片显示海报头图",
+    "hint": "读取 THBWiki 对应届次的官方宣传图并内嵌，适配本地渲染；无匹配海报或下载失败时保留文字。仅影响日报图片。",
+    "default": true
+  },
+  "touhou_event_cover_max": {
+    "type": "int",
+    "description": "每份日报最多加载几场活动海报（0–10）",
+    "default": 5
+  },
+  "touhou_event_cover_height": {
+    "type": "int",
+    "description": "活动海报头图高度（CSS 像素，120–800）",
+    "hint": "默认 300，完整显示海报，不裁切宣传文字。最终像素尺寸随 render_scale 放大。",
+    "default": 300
   }
 }

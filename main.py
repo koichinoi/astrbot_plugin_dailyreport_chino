@@ -58,7 +58,7 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.7.2"
+VERSION = "v2.7.3"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
@@ -1385,7 +1385,7 @@ class DailyReportPlugin(Star):
     async def daily_report(self, event: AstrMessageEvent):
         """发送今日日报（日历 / 新闻 / 番剧 / 热榜），渲染为香风智乃主题图片。"""
         if self.config.get("show_progress", True):
-            yield event.plain_result("📡 智乃正在整理今日日报…")
+            yield event.plain_result("⛩️ 稍等一下，今天的日报马上就好。看完记得给神社添点香火钱哦～")
         async for r in self._send_report(event):
             yield r
 

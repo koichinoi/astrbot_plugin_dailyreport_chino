@@ -179,7 +179,7 @@
   "push_enabled": {
     "type": "bool",
     "description": "启用每日定时推送（需安装 apscheduler）",
-    "hint": "打开后，每天到 push_time 会把日报推送给 push_targets 里的会话。修改后需重载插件生效。",
+    "hint": "打开后每天到 push_time 会向「订阅QQ群号」和「其他订阅会话」中的目标推送。同一目标合并去重；修改后保存并重载插件。",
     "default": false
   },
   "push_time": {
@@ -187,10 +187,22 @@
     "description": "每日推送时间（24 小时制 HH:MM）",
     "default": "08:00"
   },
+  "push_group_ids": {
+    "type": "list",
+    "description": "订阅QQ群号（每行一个）",
+    "hint": "直接填写需要每天接收日报的 QQ 群号，如 123456789。机器人必须已加入该群；仅一个 OneBot/NapCat 连接时自动识别。多账号可填 平台ID|群号，如 qq_main|123456789，或设置下面的订阅群平台 ID。删除群号后保存并重载即可取消该项订阅。",
+    "default": []
+  },
+  "push_group_platform_id": {
+    "type": "string",
+    "description": "订阅群的平台 ID（单账号可留空）",
+    "hint": "填写 AstrBot 机器人连接中的平台 ID，不是机器人QQ号；可在目标群发送 /日报状态 查看「当前平台 ID」。多个 OneBot 连接时必须明确指定；也可在每行群号前写 平台ID|群号。",
+    "default": ""
+  },
   "push_targets": {
     "type": "list",
-    "description": "推送目标会话列表（unified_msg_origin）",
-    "hint": "一般不用手填：在想接收日报的群 / 私聊里发 /日报订阅 即可自动加入（管理员）。格式如 aiocqhttp:GroupMessage:123456。",
+    "description": "其他订阅会话／完整会话 ID（兼容原订阅）",
+    "hint": "兼容原配置，每行一个完整 UMO：平台ID:GroupMessage:群号。私聊为 平台ID:FriendMessage:用户ID。普通 QQ 群可改填上面的订阅QQ群号；QQ 群内 /日报订阅 会写入群号列表，私聊及其他平台写入本列表。与群号列表合并去重。",
     "default": []
   },
   "show_touhou": {

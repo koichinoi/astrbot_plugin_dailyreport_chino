@@ -14,6 +14,7 @@ import aiohttp
 
 from .touhou import DEFAULT_TOUHOU_SOURCES, MAX_FEED_BYTES, parse_feed, select_entries, parse_translations
 from .touhou_events import DEFAULT_EVENTS_API, SCHEDULE_URL, china_today, parse_schedule, filter_events
+from .subscriptions import config_entries, manual_targets, resolve_groups
 
 from astrbot.api import logger, AstrBotConfig
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, MessageChain
@@ -57,7 +58,7 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.5.0"
+VERSION = "v2.6.0"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
@@ -1349,18 +1350,29 @@ class DailyReportPlugin(Star):
                 logger.warning(f"[dailyreport] 推送到 {umo} 失败：{e}")
 
     def _target_list(self):
-        raw = self.config.get("push_targets", []) or []
-        out = []
-        if isinstance(raw, (list, tuple, set)):
-            for x in raw:
-                s = str(x).strip()
-                if s and s not in out:
-                    out.append(s)
-        elif isinstance(raw, str):
-            for s in raw.replace("，", " ").replace(",", " ").split():
-                if s.strip() and s.strip() not in out:
-                    out.append(s.strip())
+        out = manual_targets(self.config.get("push_targets", []))
+        bindings, errors = self._group_bindings()
+        self._subscription_warnings = errors
+        for _, umo in bindings:
+            if umo and umo not in out:
+                out.append(umo)
         return out
+
+    def _qq_platform_ids(self):
+        platforms = getattr(getattr(self.context, "platform_manager", None), "platform_insts", [])
+        qq_ids = []
+        for platform in platforms:
+            try:
+                meta = platform.meta()
+                if meta.name == "aiocqhttp" and meta.id:
+                    qq_ids.append(str(meta.id))
+            except Exception:  # noqa: BLE001 - tolerate adapters still starting
+                continue
+        return qq_ids
+
+    def _group_bindings(self):
+        return resolve_groups(self.config.get("push_group_ids", []),
+                              self.config.get("push_group_platform_id", ""), self._qq_platform_ids())
 
     # ------------------------------------------------------------------ #
     # 指令
@@ -1435,14 +1447,25 @@ class DailyReportPlugin(Star):
         if umo in targets:
             yield event.plain_result("当前会话已经在每日日报推送名单里了。")
             return
-        targets.append(umo)
-        self.config["push_targets"] = targets
+        platform_id, _, session = umo.partition(":")
+        message_type, _, group_id = session.partition(":")
+        entry = f"{platform_id}|{group_id}"
+        bindings, _ = resolve_groups([entry], "", self._qq_platform_ids())
+        if message_type == "GroupMessage" and bindings and bindings[0][1] == umo:
+            groups = config_entries(self.config.get("push_group_ids", []))
+            groups.append(entry)
+            self.config["push_group_ids"] = groups
+        else:
+            # Keep private chats and other adapters in their complete UMO form.
+            explicit = manual_targets(self.config.get("push_targets", []))
+            explicit.append(umo)
+            self.config["push_targets"] = explicit
         self._save()
         note = ""
         if not self.config.get("push_enabled", False):
             note = ("\n注意：定时推送总开关 push_enabled 当前是关的，"
                     "需到配置里打开、并重载插件后才会真正按时发送。")
-        yield event.plain_result(f"✅ 已把当前会话加入每日日报推送名单（共 {len(targets)} 个）。" + note)
+        yield event.plain_result(f"✅ 已把当前会话加入每日日报推送名单（共 {len(self._target_list())} 个）。" + note)
 
     @filter.command("日报退订", alias={"dailyunsub", "取消订阅日报"})
     async def cmd_unsub(self, event: AstrMessageEvent):
@@ -1455,10 +1478,11 @@ class DailyReportPlugin(Star):
         if umo not in targets:
             yield event.plain_result("当前会话不在推送名单里。")
             return
-        targets = [t for t in targets if t != umo]
-        self.config["push_targets"] = targets
+        self.config["push_targets"] = [t for t in manual_targets(self.config.get("push_targets", [])) if t != umo]
+        bindings, _ = self._group_bindings()
+        self.config["push_group_ids"] = [entry for entry, resolved in bindings if resolved != umo]
         self._save()
-        yield event.plain_result(f"✅ 已把当前会话移出推送名单（剩 {len(targets)} 个）。")
+        yield event.plain_result(f"✅ 已把当前会话移出推送名单（剩 {len(self._target_list())} 个）。")
 
     @filter.command("日报状态", alias={"日报订阅状态", "dailystatus", "推送状态"})
     async def cmd_status(self, event: AstrMessageEvent):
@@ -1473,6 +1497,9 @@ class DailyReportPlugin(Star):
         lines.append(f"总开关 push_enabled：{'✅ 已开启' if enabled else '❌ 已关闭'}")
         lines.append(f"推送时间：每天 {ptime}")
         lines.append(f"当前主题：{theme}")
+        lines.append(f"当前平台 ID：{umo.split(':', 1)[0]}")
+        if getattr(self, "_subscription_warnings", []):
+            lines.append("⚠️ 配置页的部分群号订阅未生效，请检查群号及订阅群的平台 ID。")
         if AsyncIOScheduler is None or CronTrigger is None:
             lines.append("调度器：❌ 未安装 apscheduler（pip install apscheduler）")
         elif not enabled:
@@ -1491,7 +1518,7 @@ class DailyReportPlugin(Star):
         lines.append(f"本会话已订阅：{'✅ 是' if subbed else '❌ 否'}")
         if enabled and not targets:
             lines.append("")
-            lines.append("⚠️ 已开启但没有任何订阅会话，到点不会发！请在目标群发 /日报订阅。")
+            lines.append("⚠️ 已开启但没有任何订阅会话。可在配置页填写订阅QQ群号，或在目标群发 /日报订阅。")
         elif not subbed:
             lines.append("（想让本群收到日报：发 /日报订阅）")
         lines.append("")

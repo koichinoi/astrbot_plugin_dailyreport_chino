@@ -76,7 +76,7 @@ def filter_events(events, *, today=None, days=60, limit=5, regions=(), types=("å
         key=(item["date"],item["url"])
         if key in seen:
             continue
-        seen.add(key); result.append(dict(item,days_left=(date-today).days))
+        seen.add(key); result.append(dict(item,days_left=(date-today).days,display_url=unquote(item["url"])))
         if len(result)>=limit:
             break
     return result

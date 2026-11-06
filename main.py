@@ -58,7 +58,7 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.7.3"
+VERSION = "v2.7.4"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
@@ -2577,7 +2577,7 @@ class DailyReportPlugin(Star):
             lines.append("当前来源在此日期和地区范围内暂无已收录的展会。")
         for index, item in enumerate(data["items"], 1):
             countdown = "今天" if item["days_left"] == 0 else f"还有 {item['days_left']} 天"
-            lines.append(f"{index}. {item['title']}\n{item['date']} · {countdown} · {item['kind']}\n地点：{item['location']}\n详情：{item['url']}")
+            lines.append(f"{index}. {item['title']}\n{item['date']} · {countdown} · {item['kind']}\n地点：{item['location']}\n详情：{item.get('display_url', item['url'])}")
         lines.append(f"来源：THBWiki 日程表 · {data['checked_date']} 查询\n{SCHEDULE_URL}\n出发前请查看详情确认安排。")
         return "\n".join(lines)
 

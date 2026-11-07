@@ -58,7 +58,7 @@ BGM_UA = "koichinoi/astrbot_plugin_dailyreport_chino (https://github.com/koichin
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 # 显式版本号，便于用户在输出里确认当前加载的是哪一版
-VERSION = "v2.7.4"
+VERSION = "v2.7.5"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 REIMU_TMPL = (PLUGIN_DIR / "templates" / "reimu.html").read_text(encoding="utf-8")
@@ -1339,7 +1339,9 @@ class DailyReportPlugin(Star):
         img = await self._render_themed(data)
         text = self._report_text(data)
         images = self._news_images(data)
-        for umo in targets:
+        for index, umo in enumerate(targets):
+            if index:
+                await asyncio.sleep(10)
             try:
                 if img:
                     await self.context.send_message(umo, self._img_chain(img))
